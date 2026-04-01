@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VisiArt - Devine le Dessin</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Nunito', sans-serif; }
+    .pastel-gradient { background: linear-gradient(135deg, #fef3c7 0%, #fce7f3 50%, #e0e7ff 100%); }
+    .canvas-shadow { box-shadow: 0 8px 32px rgba(0,0,0,0.1), inset 0 2px 4px rgba(255,255,255,0.5); }
+    .btn-bounce:active { transform: scale(0.95); }
+    .color-btn { transition: transform 0.15s, box-shadow 0.15s; }
+    .color-btn:hover { transform: scale(1.15); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .color-btn.active { transform: scale(1.2); box-shadow: 0 0 0 3px white, 0 0 0 5px #888; }
+    @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.4); } 50% { box-shadow: 0 0 40px rgba(251, 191, 36, 0.8); } }
+    .timer-warning { animation: pulse-glow 0.5s ease-in-out infinite; }
+    .word-reveal { background: linear-gradient(90deg, #fbbf24, #f59e0b); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    #drawing-canvas { display: block; cursor: crosshair; touch-action: none; }
+  </style>
+</head>
+<body class="h-full m-0 p-0 overflow-auto">
+  <div id="app" class="min-h-full pastel-gradient p-4 md:p-6">
+
+    <!-- Écran d'accueil -->
+    <div id="welcome-screen" class="max-w-lg mx-auto text-center py-8">
+      <div class="bg-white/80 backdrop-blur rounded-3xl p-8 shadow-xl">
+        <div class="mb-6">
+          <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-400 to-pink-400 rounded-2xl mb-4 shadow-lg">
+            <i data-lucide="palette" class="w-10 h-10 text-white"></i>
+          </div>
+          <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800 mb-2">VisiArt</h1>
+          <p class="text-lg text-gray-600">Devine le Dessin !</p>
+        </div>
+        <p class="text-gray-500 mb-6 text-sm">Un joueur dessine, les autres devinent. Plus vite vous trouvez, plus vous gagnez de points !</p>
+        <div class="mb-6">
+          <label class="block text-left text-sm font-semibold text-gray-700 mb-2">Votre prénom</label>
+          <input type="text" id="player-name-input" placeholder="Entrez votre prénom..." class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-amber-400 focus:outline-none text-lg transition-colors">
+        </div>
+        <button id="start-btn" class="w-full py-4 bg-gradient-to-r from-amber-400 to-pink-400 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all btn-bounce">
+          🎨 Commencer à jouer
+        </button>
+        <div id="leaderboard-preview" class="mt-6 pt-6 border-t border-gray-200">
+          <h3 class="font-bold text-gray-700 mb-3 flex items-center justify-center gap-2">
+            <i data-lucide="trophy" class="w-5 h-5 text-amber-500"></i> Meilleurs scores
+          </h3>
+          <div id="top-scores" class="space-y-2 text-sm">
+            <p class="text-gray-400 text-center py-4">Aucun score pour le moment</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Écran de jeu -->
+    <div id="game-screen" class="hidden max-w-4xl mx-auto">
+      <div class="bg-white/80 backdrop-blur rounded-2xl p-4 mb-4 shadow-lg">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 bg-amber-100 px-4 py-2 rounded-xl">
+              <i data-lucide="user" class="w-5 h-5 text-amber-600"></i>
+              <span id="current-player" class="font-bold text-amber-800">Joueur</span>
+            </div>
+            <div class="flex items-center gap-2 bg-pink-100 px-4 py-2 rounded-xl">
+              <i data-lucide="star" class="w-5 h-5 text-pink-600"></i>
+              <span id="current-score" class="font-bold text-pink-800">0 pts</span>
+            </div>
+          </div>
+          <div id="timer-display" class="flex items-center gap-2 bg-indigo-100 px-5 py-2 rounded-xl">
+            <i data-lucide="clock" class="w-5 h-5 text-indigo-600"></i>
+            <span id="timer-text" class="font-bold text-indigo-800 text-xl tabular-nums">5:00</span>
+          </div>
+          <div class="flex items-center gap-2 bg-emerald-100 px-4 py-2 rounded-xl">
+            <i data-lucide="hash" class="w-5 h-5 text-emerald-600"></i>
+            <span class="font-bold text-emerald-800">Manche <span id="round-number">1</span>/5</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-4">
+        <!-- Panneau gauche -->
+        <div class="bg-white/80 backdrop-blur rounded-2xl p-4 shadow-lg">
+          <div id="word-panel" class="text-center">
+            <p class="text-sm text-gray-500 mb-2">Mot à dessiner :</p>
+            <div id="secret-word" class="text-2xl font-extrabold word-reveal py-3 px-4 bg-amber-50 rounded-xl cursor-pointer select-none" onclick="toggleWordVisibility()">
+              Cliquez pour révéler
+            </div>
+            <p class="text-xs text-gray-400 mt-2">👆 Cliquez pour afficher/masquer</p>
+          </div>
+          <div class="mt-4">
+            <p class="text-sm font-semibold text-gray-600 mb-2">Catégorie :</p>
+            <span id="word-category" class="inline-block bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-medium">Art</span>
+          </div>
+          <button id="skip-word-btn" class="w-full mt-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
+            <i data-lucide="skip-forward" class="w-4 h-4"></i> Passer ce mot (-50 pts)
+          </button>
+        </div>
+
+        <!-- Zone de dessin -->
+        <div class="md:col-span-2">
+          <div class="bg-white rounded-2xl p-4 shadow-lg canvas-shadow">
+            <div id="canvas-container" style="width:100%; aspect-ratio: 4/3; position:relative;">
+              <canvas id="drawing-canvas" style="width:100%; height:100%; border-radius:12px;"></canvas>
+            </div>
+            <!-- Outils -->
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+              <div class="flex gap-2 flex-wrap">
+                <button class="color-btn w-8 h-8 rounded-full bg-gray-800 active" data-color="#1f2937"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-red-500" data-color="#ef4444"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-amber-500" data-color="#f59e0b"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-yellow-400" data-color="#facc15"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-emerald-500" data-color="#10b981"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-blue-500" data-color="#3b82f6"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-purple-500" data-color="#a855f7"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-pink-500" data-color="#ec4899"></button>
+                <button class="color-btn w-8 h-8 rounded-full bg-white border-2 border-gray-300" data-color="#ffffff"></button>
+              </div>
+              <div class="flex items-center gap-2 ml-auto">
+                <i data-lucide="pen-tool" class="w-4 h-4 text-gray-500"></i>
+                <input type="range" id="brush-size" min="2" max="30" value="8" class="w-24 accent-amber-500">
+                <span id="brush-size-display" class="text-sm text-gray-600 w-8">8px</span>
+              </div>
+              <button id="undo-btn" class="p-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors" title="Annuler">
+                <i data-lucide="undo-2" class="w-5 h-5 text-gray-600"></i>
+              </button>
+              <button id="clear-btn" class="p-2 bg-red-100 hover:bg-red-200 rounded-xl transition-colors" title="Effacer tout">
+                <i data-lucide="trash-2" class="w-5 h-5 text-red-600"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Zone de réponse -->
+          <div class="bg-white/80 backdrop-blur rounded-2xl p-4 mt-4 shadow-lg">
+            <p class="text-sm font-semibold text-gray-600 mb-3">Les autres joueurs devinent :</p>
+            <div class="flex gap-2">
+              <input type="text" id="guess-input" placeholder="Entrez votre réponse..." class="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-emerald-400 focus:outline-none transition-colors">
+              <button id="submit-guess-btn" class="px-6 py-3 bg-gradient-to-r from-emerald-400 to-teal-400 text-white font-bold rounded-xl shadow hover:shadow-lg transition-all btn-bounce">
+                Valider
+              </button>
+            </div>
+            <div id="guess-feedback" class="mt-3 text-center font-medium hidden"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Écran de fin de manche -->
+    <div id="round-end-screen" class="hidden max-w-lg mx-auto text-center py-8">
+      <div class="bg-white/80 backdrop-blur rounded-3xl p-8 shadow-xl">
+        <div id="round-result-icon" class="text-6xl mb-4">🎉</div>
+        <h2 id="round-result-title" class="text-2xl font-extrabold text-gray-800 mb-2">Bien joué !</h2>
+        <p id="round-result-text" class="text-gray-600 mb-4">Le mot était : <span id="revealed-word" class="font-bold text-amber-600"></span></p>
+        <div id="round-points" class="text-3xl font-extrabold text-emerald-500 mb-6">+0 pts</div>
+        <button id="next-round-btn" class="w-full py-4 bg-gradient-to-r from-amber-400 to-pink-400 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all btn-bounce">
+          Manche suivante →
+        </button>
+      </div>
+    </div>
+
+    <!-- Écran de fin de partie -->
+    <div id="game-over-screen" class="hidden max-w-lg mx-auto text-center py-8">
+      <div class="bg-white/80 backdrop-blur rounded-3xl p-8 shadow-xl">
+        <div class="text-6xl mb-4">🏆</div>
+        <h2 class="text-3xl font-extrabold text-gray-800 mb-2">Partie terminée !</h2>
+        <p class="text-gray-600 mb-2">Votre score final :</p>
+        <div id="final-score" class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-pink-500 mb-6">0 pts</div>
+        <div id="final-stats" class="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+          <div class="flex justify-between py-2 border-b border-gray-200">
+            <span class="text-gray-600">Mots trouvés</span>
+            <span id="words-found" class="font-bold text-gray-800">0/5</span>
+          </div>
+          <div class="flex justify-between py-2 border-b border-gray-200">
+            <span class="text-gray-600">Meilleur temps</span>
+            <span id="best-time" class="font-bold text-gray-800">--</span>
+          </div>
+          <div class="flex justify-between py-2">
+            <span class="text-gray-600">Parties jouées</span>
+            <span id="total-games" class="font-bold text-gray-800">1</span>
+          </div>
+        </div>
+        <button id="play-again-btn" class="w-full py-4 bg-gradient-to-r from-amber-400 to-pink-400 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-xl transition-all btn-bounce">
+          🎨 Rejouer
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Mots par catégorie
+    const wordCategories = {
+      'Facile': ['pomme', 'maison', 'soleil', 'lune', 'chat', 'chien', 'arbre', 'fleur', 'cœur', 'étoile', 'main', 'nuage', 'pluie', 'voiture', 'bateau', 'avion', 'vélo'],
+      'VisiArt': ['pinceau', 'palette', 'tableau', 'toile', 'couleur', 'dessin', 'peinture', 'rouge', 'bleu', 'jaune', 'vert', 'rose', 'orange', 'violet', 'noir', 'blanc'],
+      'Moyen': ['chevalet', 'crayon', 'papier', 'croquis', 'cadre', 'portrait', 'paysage', 'forêt', 'montagne', 'rivière', 'océan', 'château', 'pont', 'fenêtre', 'porte', 'clé'],
+      'Animaux': ['souris', 'lion', 'éléphant', 'girafe', 'zèbre', 'papillon', 'oiseau', 'poisson', 'tortue', 'renard', 'ours', 'lapin', 'cochon', 'vache', 'cheval', 'crocodile'],
+      'Objets': ['ballon', 'balai', 'seau', 'parapluie', 'lunettes', 'montre', 'téléphone', 'ampoule', 'livre', 'crayon', 'gomme', 'ciseaux', 'fourchette', 'cuillère', 'assiette', 'verre'],
+      'Nature': ['herbe', 'feuille', 'branche', 'pierre', 'sable', 'neige', 'feu', 'glace', 'rocher', 'cascade', 'chemin', 'buisson', 'champignon']
+    };
+
+    // État du jeu
+    let gameState = {
+      playerName: '',
+      currentScore: 0,
+      currentRound: 1,
+      maxRounds: 5,
+      timeRemaining: 300,
+      currentWord: '',
+      currentCategory: '',
+      wordVisible: false,
+      wordsFound: 0,
+      roundTimes: [],
+      timerInterval: null,
+      usedWords: []
+    };
+
+    // État du dessin
+    let drawingState = {
+      isDrawing: false,
+      currentColor: '#1f2937',
+      brushSize: 8,
+      history: [],
+      historyIndex: -1,
+      lastX: 0,
+      lastY: 0
+    };
+
+    let canvas, ctx;
+
+    // ─── CANVAS INIT ───────────────────────────────────────────────
+    function initCanvas() {
+      canvas = document.getElementById('drawing-canvas');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      // Mouse events
+      canvas.addEventListener('mousedown', onMouseDown);
+      canvas.addEventListener('mousemove', onMouseMove);
+      canvas.addEventListener('mouseup', onMouseUp);
+      canvas.addEventListener('mouseleave', onMouseUp);
+
+      // Touch events
+      canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+      canvas.addEventListener('touchend', onMouseUp, { passive: false });
+    }
+
+    function resizeCanvas() {
+      // Save current drawing
+      const imageData = canvas.width > 0 ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
+
+      const container = document.getElementById('canvas-container');
+      const rect = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+
+      // White background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      // Restore drawing if possible
+      if (imageData) {
+        const tmp = document.createElement('canvas');
+        tmp.width = imageData.width;
+        tmp.height = imageData.height;
+        tmp.getContext('2d').putImageData(imageData, 0, 0);
+        ctx.drawImage(tmp, 0, 0, rect.width, rect.height);
+      }
+    }
+
+    // ─── COORDINATE HELPERS ────────────────────────────────────────
+    // Returns canvas logical coordinates (CSS pixels) from a mouse/touch event
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      let clientX, clientY;
+      if (e.touches) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    // ─── DRAW HELPERS ──────────────────────────────────────────────
+    function beginStroke(x, y) {
+      drawingState.isDrawing = true;
+      drawingState.lastX = x;
+      drawingState.lastY = y;
+      ctx.beginPath();
+      ctx.arc(x, y, drawingState.brushSize / 2, 0, Math.PI * 2);
+      ctx.fillStyle = drawingState.currentColor;
+      ctx.fill();
+    }
+
+    function continueStroke(x, y) {
+      if (!drawingState.isDrawing) return;
+      ctx.beginPath();
+      ctx.moveTo(drawingState.lastX, drawingState.lastY);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = drawingState.currentColor;
+      ctx.lineWidth = drawingState.brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      drawingState.lastX = x;
+      drawingState.lastY = y;
+    }
+
+    function endStroke() {
+      if (!drawingState.isDrawing) return;
+      drawingState.isDrawing = false;
+      saveState();
+    }
+
+    // ─── MOUSE HANDLERS ────────────────────────────────────────────
+    function onMouseDown(e) {
+      e.preventDefault();
+      const { x, y } = getPos(e);
+      beginStroke(x, y);
+    }
+
+    function onMouseMove(e) {
+      e.preventDefault();
+      if (!drawingState.isDrawing) return;
+      const { x, y } = getPos(e);
+      continueStroke(x, y);
+    }
+
+    function onMouseUp(e) {
+      endStroke();
+    }
+
+    // ─── TOUCH HANDLERS ────────────────────────────────────────────
+    function onTouchStart(e) {
+      e.preventDefault();
+      const { x, y } = getPos(e);
+      beginStroke(x, y);
+    }
+
+    function onTouchMove(e) {
+      e.preventDefault();
+      if (!drawingState.isDrawing) return;
+      const { x, y } = getPos(e);
+      continueStroke(x, y);
+    }
+
+    // ─── HISTORY ──────────────────────────────────────────────────
+    function saveState() {
+      drawingState.historyIndex++;
+      drawingState.history = drawingState.history.slice(0, drawingState.historyIndex);
+      drawingState.history.push(canvas.toDataURL());
+    }
+
+    function undo() {
+      if (drawingState.historyIndex <= 0) return;
+      drawingState.historyIndex--;
+      restoreState();
+    }
+
+    function restoreState() {
+      const img = new Image();
+      img.onload = () => {
+        const rect = canvas.getBoundingClientRect();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, rect.width, rect.height);
+        ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      };
+      img.src = drawingState.history[drawingState.historyIndex];
+    }
+
+    function clearCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      saveState();
+    }
+
+    // ─── COLOR & BRUSH ─────────────────────────────────────────────
+    function setupColorButtons() {
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          drawingState.currentColor = btn.dataset.color;
+        });
+      });
+    }
+
+    function setupBrushSize() {
+      const slider = document.getElementById('brush-size');
+      const display = document.getElementById('brush-size-display');
+      slider.addEventListener('input', () => {
+        drawingState.brushSize = parseInt(slider.value);
+        display.textContent = slider.value + 'px';
+      });
+    }
+
+    // ─── WORD LOGIC ────────────────────────────────────────────────
+    function getRandomWord() {
+      const categories = Object.keys(wordCategories);
+      const category = categories[Math.floor(Math.random() * categories.length)];
+      const words = wordCategories[category].filter(w => !gameState.usedWords.includes(w));
+      if (words.length === 0) { gameState.usedWords = []; return getRandomWord(); }
+      const word = words[Math.floor(Math.random() * words.length)];
+      gameState.usedWords.push(word);
+      return { word, category };
+    }
+
+    function toggleWordVisibility() {
+      const el = document.getElementById('secret-word');
+      gameState.wordVisible = !gameState.wordVisible;
+      if (gameState.wordVisible) {
+        el.textContent = gameState.currentWord;
+        el.classList.add('word-reveal');
+      } else {
+        el.textContent = 'Cliquez pour révéler';
+        el.classList.remove('word-reveal');
+      }
+    }
+
+    // ─── TIMER ─────────────────────────────────────────────────────
+    function startTimer() {
+      gameState.timeRemaining = 300;
+      updateTimerDisplay();
+      gameState.timerInterval = setInterval(() => {
+        gameState.timeRemaining--;
+        updateTimerDisplay();
+        if (gameState.timeRemaining <= 30) document.getElementById('timer-display').classList.add('timer-warning');
+        if (gameState.timeRemaining <= 0) endRound(false);
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      const m = Math.floor(gameState.timeRemaining / 60);
+      const s = gameState.timeRemaining % 60;
+      document.getElementById('timer-text').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function stopTimer() {
+      if (gameState.timerInterval) { clearInterval(gameState.timerInterval); gameState.timerInterval = null; }
+      document.getElementById('timer-display').classList.remove('timer-warning');
+    }
+
+    // ─── SCORE ─────────────────────────────────────────────────────
+    function calculatePoints() {
+      const timeUsed = 300 - gameState.timeRemaining;
+      return 1000 + Math.max(0, 500 - timeUsed * 2);
+    }
+
+    // ─── GUESS ─────────────────────────────────────────────────────
+    function checkGuess() {
+      const input = document.getElementById('guess-input');
+      const feedback = document.getElementById('guess-feedback');
+      const guess = input.value.trim().toLowerCase();
+      const answer = gameState.currentWord.toLowerCase();
+      if (!guess) return;
+
+      feedback.classList.remove('hidden');
+      if (guess === answer) {
+        const points = calculatePoints();
+        gameState.currentScore += points;
+        gameState.wordsFound++;
+        gameState.roundTimes.push(300 - gameState.timeRemaining);
+        feedback.textContent = `🎉 Correct ! +${points} points`;
+        feedback.className = 'mt-3 text-center font-medium text-emerald-600 bg-emerald-100 py-2 px-4 rounded-lg';
+        setTimeout(() => endRound(true, points), 1500);
+      } else {
+        const sim = [...guess].filter(c => answer.includes(c)).length / Math.max(guess.length, answer.length);
+        if (sim > 0.6) {
+          feedback.textContent = '🔥 Presque ! Continuez...';
+          feedback.className = 'mt-3 text-center font-medium text-amber-600 bg-amber-100 py-2 px-4 rounded-lg';
+        } else {
+          feedback.textContent = '❌ Non, essayez encore !';
+          feedback.className = 'mt-3 text-center font-medium text-red-600 bg-red-100 py-2 px-4 rounded-lg';
+        }
+        input.value = '';
+        setTimeout(() => feedback.classList.add('hidden'), 2000);
+      }
+    }
+
+    function skipWord() {
+      gameState.currentScore = Math.max(0, gameState.currentScore - 50);
+      document.getElementById('current-score').textContent = gameState.currentScore + ' pts';
+      endRound(false, -50);
+    }
+
+    // ─── ROUND FLOW ────────────────────────────────────────────────
+    function endRound(success, points = 0) {
+      stopTimer();
+      document.getElementById('game-screen').classList.add('hidden');
+      document.getElementById('round-end-screen').classList.remove('hidden');
+      document.getElementById('revealed-word').textContent = gameState.currentWord;
+      if (success) {
+        document.getElementById('round-result-icon').textContent = '🎉';
+        document.getElementById('round-result-title').textContent = 'Bien joué !';
+        document.getElementById('round-result-text').innerHTML = `Vous avez trouvé <span class="font-bold text-amber-600">${gameState.currentWord}</span>`;
+        document.getElementById('round-points').textContent = `+${points} pts`;
+        document.getElementById('round-points').className = 'text-3xl font-extrabold text-emerald-500 mb-6';
+      } else {
+        document.getElementById('round-result-icon').textContent = points < 0 ? '⏭️' : '⏰';
+        document.getElementById('round-result-title').textContent = points < 0 ? 'Mot passé' : 'Temps écoulé !';
+        document.getElementById('round-result-text').innerHTML = `Le mot était : <span class="font-bold text-amber-600">${gameState.currentWord}</span>`;
+        document.getElementById('round-points').textContent = points < 0 ? '-50 pts' : '0 pts';
+        document.getElementById('round-points').className = 'text-3xl font-extrabold text-red-500 mb-6';
+      }
+      document.getElementById('next-round-btn').textContent = gameState.currentRound >= gameState.maxRounds ? 'Voir les résultats 🏆' : 'Manche suivante →';
+    }
+
+    function nextRound() {
+      if (gameState.currentRound >= gameState.maxRounds) { endGame(); return; }
+      gameState.currentRound++;
+      startRound();
+    }
+
+    function startRound() {
+      ['welcome-screen','round-end-screen','game-over-screen'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      document.getElementById('game-screen').classList.remove('hidden');
+
+      const { word, category } = getRandomWord();
+      gameState.currentWord = word;
+      gameState.currentCategory = category;
+      gameState.wordVisible = false;
+
+      document.getElementById('secret-word').textContent = 'Cliquez pour révéler';
+      document.getElementById('secret-word').classList.add('word-reveal');
+      document.getElementById('word-category').textContent = category;
+      document.getElementById('current-player').textContent = gameState.playerName;
+      document.getElementById('current-score').textContent = gameState.currentScore + ' pts';
+      document.getElementById('round-number').textContent = gameState.currentRound;
+      document.getElementById('guess-input').value = '';
+      document.getElementById('guess-feedback').classList.add('hidden');
+
+      // Reset canvas history and clear
+      drawingState.history = [];
+      drawingState.historyIndex = -1;
+      // Force resize in case canvas was hidden during init (fixes local file usage)
+      resizeCanvas();
+      saveState();
+
+      startTimer();
+    }
+
+    function endGame() {
+      document.getElementById('round-end-screen').classList.add('hidden');
+      document.getElementById('game-over-screen').classList.remove('hidden');
+      document.getElementById('final-score').textContent = gameState.currentScore + ' pts';
+      document.getElementById('words-found').textContent = `${gameState.wordsFound}/${gameState.maxRounds}`;
+      if (gameState.roundTimes.length > 0) {
+        const best = Math.min(...gameState.roundTimes);
+        document.getElementById('best-time').textContent = `${Math.floor(best/60)}:${(best%60).toString().padStart(2,'0')}`;
+      }
+    }
+
+    function playAgain() {
+      Object.assign(gameState, { currentScore: 0, currentRound: 1, wordsFound: 0, roundTimes: [], usedWords: [] });
+      startRound();
+    }
+
+    function startGame() {
+      const nameInput = document.getElementById('player-name-input');
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.classList.add('border-red-400'); nameInput.focus(); return; }
+      gameState.playerName = name;
+      startRound();
+    }
+
+    // ─── INIT ──────────────────────────────────────────────────────
+    function init() {
+      // Delay canvas init to ensure layout is fully rendered (fixes file:// local usage)
+      setTimeout(() => {
+        initCanvas();
+      }, 100);
+      setupColorButtons();
+      setupBrushSize();
+
+      document.getElementById('start-btn').addEventListener('click', startGame);
+      document.getElementById('player-name-input').addEventListener('keypress', e => { if (e.key === 'Enter') startGame(); e.target.classList.remove('border-red-400'); });
+      document.getElementById('undo-btn').addEventListener('click', undo);
+      document.getElementById('clear-btn').addEventListener('click', clearCanvas);
+      document.getElementById('skip-word-btn').addEventListener('click', skipWord);
+      document.getElementById('submit-guess-btn').addEventListener('click', checkGuess);
+      document.getElementById('guess-input').addEventListener('keypress', e => { if (e.key === 'Enter') checkGuess(); });
+      document.getElementById('next-round-btn').addEventListener('click', nextRound);
+      document.getElementById('play-again-btn').addEventListener('click', playAgain);
+
+      lucide.createIcons();
+    }
+
+    init();
+  </script>
+</body>
+</html>
